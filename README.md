@@ -133,17 +133,17 @@ Dashboard Features
 spike on weekends?”, etc.).
 Research Questions (Examples)
 
-Each team member proposed at least two questions; examples include:
-	1.	Which borough has the highest collision density?
-	2.	How do collisions vary by hour of day and day of week?
-	3.	Which contributing factors are most common in severe crashes?
-	4.	How do injuries vs fatalities differ between boroughs?
-	5.	Which vehicle types are most frequently involved in pedestrian injuries?
-	6.	How did collision counts change across years?
-	7.	How do weekend collisions differ from weekday collisions?
-	8.	At what hours do alcohol-related factors appear most often?
-	9.	Which boroughs show the highest severity scores?
-	10.	How does total injured change during adverse weather conditions?
+Each team member proposed two research questions; include:
+	# RQ1: How do collision counts change over time (daily & monthly trends)?
+    # RQ2: Are motor vehicle collisions increasing or decreasing across recent years?
+    # RQ3: Which borough has the highest number of motor vehicle collisions?
+    # RQ4: How do injury and fatality rates vary across NYC boroughs?
+    # RQ5: Which hours of the day have the highest and lowest collision rates?
+    # RQ6: What are the most common contributing factors behind NYC collisions?
+    # RQ7: How do pedestrian, cyclist, and motorist injuries differ across boroughs?
+    # RQ8: Which vehicle types are most frequently involved in collisions?
+    # RQ9: How does collision density vary geographically across NYC neighborhoods?
+    # RQ10: Do environmental or behavioral contributing factors correlate with higher crash severity?
 
 These questions are answered with a combination of static plots in
 07_final_visual_analysis.ipynb and interactive views in the dashboard.
