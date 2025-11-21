@@ -30,20 +30,21 @@ env.bak/
 venv.bak/
 
 # Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb_checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
 */.ipynb_checkpoints/*
+.jupyter_checkpoints/
 
 # Environment variables
 .env
 .env.local
 
-# Data files (cache only, keep processed structure)
-data/cache/
-*.csv
-*.json
-!data/processed/.gitkeep
+# Data files - exclude entire data folder except structure
+data/
+!data/README.md
 !data/cache/.gitkeep
+!data/processed/.gitkeep
+!data/temp/.gitkeep
 
 # IDE
 .vscode/

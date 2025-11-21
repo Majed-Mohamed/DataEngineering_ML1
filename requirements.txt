@@ -11,6 +11,8 @@ requests>=2.31.0
 dash>=2.14.0
 dash-bootstrap-components>=1.5.0
 plotly>=5.17.0
+streamlit>=1.30.0
+duckdb>=0.9.0
 
 # Deployment
 gunicorn>=21.2.0
@@ -18,6 +20,7 @@ gunicorn>=21.2.0
 # Data Visualization (for notebooks)
 matplotlib>=3.7.0
 seaborn>=0.12.0
+missingno>=0.5.2
 
 # Jupyter (for development)
 jupyter>=1.0.0
