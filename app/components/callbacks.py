@@ -1,72 +1,70 @@
-from dash import Input, Output, State
+from dash import Input, Output
 from components.graphs import (
     create_time_series_chart,
     create_borough_comparison_chart,
     create_severity_chart,
     create_heatmap,
     create_contributing_factors_chart,
-    create_hourly_distribution_chart
+    create_hourly_distribution_chart,
 )
-import pandas as pd
+
 
 def register_callbacks(app, df):
-    """
-    Register all dashboard callbacks
-    
-    Parameters:
-    -----------
-    app : Dash app instance
-    df : pandas DataFrame with processed data
-    """
+    """Register all dashboard callbacks."""
 
-    # Update all graphs when any filter changes
     @app.callback(
         [
-            Output('time-series-chart', 'children'),
-            Output('borough-comparison-chart', 'children'),
-            Output('severity-chart', 'children'),
-            Output('heatmap-chart', 'children'),
-            Output('contributing-factors-chart', 'children'),
-            Output('hourly-distribution-chart', 'children')
+            Output("time-series-chart", "children"),
+            Output("borough-comparison-chart", "children"),
+            Output("severity-chart", "children"),
+            Output("heatmap-chart", "children"),
+            Output("contributing-factors-chart", "children"),
+            Output("hourly-distribution-chart", "children"),
         ],
         [
-            Input('date-filter', 'start_date'),
-            Input('date-filter', 'end_date'),
-            Input('borough-filter', 'value'),
-            Input('severity-filter', 'value'),
-            Input('vehicle-type-filter', 'value')
-        ]
+            Input("date-filter", "start_date"),
+            Input("date-filter", "end_date"),
+            Input("borough-filter", "value"),
+            Input("severity-filter", "value"),
+            Input("vehicle-type-filter", "value"),
+        ],
     )
     def update_graphs(start_date, end_date, boroughs, severity, vehicle_types):
-        # Start with the full DataFrame
+        # Start fresh
         filtered_df = df.copy()
 
-        # Filter by date
+        # DATE FILTER
         if start_date:
-            filtered_df = filtered_df[filtered_df['CRASH_DATE'] >= start_date]
+            filtered_df = filtered_df[filtered_df["crash_date"] >= start_date]
         if end_date:
-            filtered_df = filtered_df[filtered_df['CRASH_DATE'] <= end_date]
+            filtered_df = filtered_df[filtered_df["crash_date"] <= end_date]
 
-        # Filter by borough
+        # BOROUGH FILTER
         if boroughs:
-            filtered_df = filtered_df[filtered_df['BOROUGH'].isin(boroughs)]
+            filtered_df = filtered_df[filtered_df["borough"].isin(boroughs)]
 
-        # Filter by severity
+        # SEVERITY FILTER
         if severity:
-            severity_map = {'INJURY': 'NUMBER OF PERSONS INJURED', 'FATAL': 'NUMBER OF PERSONS KILLED'}
-            cols_to_check = [severity_map[s] for s in severity if s in severity_map]
-            filtered_df = filtered_df[filtered_df[cols_to_check].sum(axis=1) > 0]
+            mask = False
+            if "INJURY" in severity:
+                mask = mask | (filtered_df["total_injured"] > 0)
+            if "FATAL" in severity:
+                mask = mask | (filtered_df["total_killed"] > 0)
+            filtered_df = filtered_df[mask]
 
-        # Filter by vehicle types
+        # VEHICLE TYPE FILTER
         if vehicle_types:
-            filtered_df = filtered_df[filtered_df['VEHICLE_TYPE'].isin(vehicle_types)]
+            mask = (
+                filtered_df["vehicle_type_code1"].isin(vehicle_types)
+                | filtered_df["vehicle_type_code2"].isin(vehicle_types)
+            )
+            filtered_df = filtered_df[mask]
 
-        # Return updated graphs
         return (
             create_time_series_chart(filtered_df),
             create_borough_comparison_chart(filtered_df),
             create_severity_chart(filtered_df),
             create_heatmap(filtered_df),
             create_contributing_factors_chart(filtered_df),
-            create_hourly_distribution_chart(filtered_df)
+            create_hourly_distribution_chart(filtered_df),
         )
