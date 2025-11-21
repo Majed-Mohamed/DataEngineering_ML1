@@ -75,7 +75,7 @@ st.markdown("""
 # DATA CONNECTION
 # ============================================================================
 
-# Google Drive URL for the data file
+# Google Drive file ID
 DRIVE_FILE_ID = "1qwjegnIt8eX1PQQmjRRDNK_GYGtX9hSp"
 DATA_PATH = PROCESSED_DATA_DIR / "dashboard_data.parquet"
 
@@ -90,39 +90,34 @@ def download_data_from_drive():
         temp_dir = tempfile.gettempdir()
         temp_file = os.path.join(temp_dir, "dashboard_data.parquet")
         
-        # Check if already downloaded in this session
-        if os.path.exists(temp_file) and os.path.getsize(temp_file) > 1000000:  # At least 1MB
+        # Check if already downloaded in this session (verify size)
+        if os.path.exists(temp_file) and os.path.getsize(temp_file) > 1000000:
             return temp_file
         
-        st.info("📥 Downloading data from Google Drive... This may take a moment.")
+        # Show download progress with a spinner
+        with st.spinner('📥 Downloading data from Google Drive...'):
+            try:
+                import gdown
+                url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
+                gdown.download(url, temp_file, quiet=True)
+                
+                # Verify file size
+                file_size = os.path.getsize(temp_file)
+                if file_size < 1000000:
+                    raise Exception(f"Downloaded file too small ({file_size} bytes)")
+                
+            except ImportError:
+                # Install gdown if not available
+                import subprocess
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "gdown"])
+                import gdown
+                url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
+                gdown.download(url, temp_file, quiet=True)
         
-        # Use gdown for reliable Google Drive downloads
-        try:
-            import gdown
-            url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
-            gdown.download(url, temp_file, quiet=False)
-            
-            # Verify file size
-            file_size = os.path.getsize(temp_file)
-            if file_size < 1000000:  # Less than 1MB suggests download failed
-                raise Exception(f"Downloaded file too small ({file_size} bytes), likely an error page")
-            
-            st.success(f"✅ Data downloaded successfully! ({file_size / (1024**2):.1f} MB)")
-            return temp_file
-            
-        except ImportError:
-            # Fallback to requests with confirmation token handling
-            st.warning("Installing gdown for reliable downloads...")
-            import subprocess
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
-            import gdown
-            url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
-            gdown.download(url, temp_file, quiet=False)
-            return temp_file
+        return temp_file
         
     except Exception as e:
         st.error(f"❌ Error downloading data: {e}")
-        # Clean up failed download
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return None
