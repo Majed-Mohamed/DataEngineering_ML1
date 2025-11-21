@@ -11,6 +11,9 @@ import duckdb
 from pathlib import Path
 from datetime import datetime
 import sys
+import requests
+import tempfile
+import os
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -77,16 +80,43 @@ DRIVE_URL = "https://drive.google.com/uc?export=download&id=1qwjegnIt8eX1PQQmjRR
 DATA_PATH = PROCESSED_DATA_DIR / "dashboard_data.parquet"
 
 @st.cache_resource
+def download_data_from_drive():
+    """Download data from Google Drive if local file doesn't exist"""
+    if DATA_PATH.exists():
+        return str(DATA_PATH)
+    
+    try:
+        # Create a temporary file to store the downloaded data
+        temp_dir = tempfile.gettempdir()
+        temp_file = os.path.join(temp_dir, "dashboard_data.parquet")
+        
+        # Check if already downloaded in this session
+        if os.path.exists(temp_file):
+            return temp_file
+        
+        st.info("📥 Downloading data from Google Drive... This may take a moment.")
+        
+        # Download the file
+        response = requests.get(DRIVE_URL, stream=True)
+        response.raise_for_status()
+        
+        # Save to temp file
+        with open(temp_file, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        st.success("✅ Data downloaded successfully!")
+        return temp_file
+        
+    except Exception as e:
+        st.error(f"❌ Error downloading data: {e}")
+        return None
+
+@st.cache_resource
 def get_db_connection():
     """Create a DuckDB connection and register the view"""
-    # Try local file first, then Google Drive
-    data_source = None
-    
-    if DATA_PATH.exists():
-        data_source = str(DATA_PATH)
-    else:
-        # Use Google Drive URL for deployment
-        data_source = DRIVE_URL
+    # Get data source (local or downloaded from Drive)
+    data_source = download_data_from_drive()
     
     if not data_source:
         return None
@@ -97,6 +127,7 @@ def get_db_connection():
         return con
     except Exception as e:
         st.error(f"❌ Error connecting to database: {e}")
+        st.error(f"Data source: {data_source}")
         return None
 
 @st.cache_data(ttl=300)
