@@ -72,17 +72,28 @@ st.markdown("""
 # DATA CONNECTION
 # ============================================================================
 
+# Google Drive URL for the data file
+DRIVE_URL = "https://drive.google.com/uc?export=download&id=1qwjegnIt8eX1PQQmjRRDNK_GYGtX9hSp"
 DATA_PATH = PROCESSED_DATA_DIR / "dashboard_data.parquet"
 
 @st.cache_resource
 def get_db_connection():
     """Create a DuckDB connection and register the view"""
-    if not DATA_PATH.exists():
+    # Try local file first, then Google Drive
+    data_source = None
+    
+    if DATA_PATH.exists():
+        data_source = str(DATA_PATH)
+    else:
+        # Use Google Drive URL for deployment
+        data_source = DRIVE_URL
+    
+    if not data_source:
         return None
     
     con = duckdb.connect(database=':memory:')
     try:
-        con.execute(f"CREATE OR REPLACE VIEW crashes AS SELECT * FROM '{DATA_PATH}'")
+        con.execute(f"CREATE OR REPLACE VIEW crashes AS SELECT * FROM '{data_source}'")
         return con
     except Exception as e:
         st.error(f"❌ Error connecting to database: {e}")
@@ -282,17 +293,15 @@ def main():
     st.markdown('<h1 class="main-header">🚗 NYC Motor Vehicle Collisions</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Data Engineering & Visualization Dashboard (Powered by DuckDB)</p>', unsafe_allow_html=True)
     
-    # Check if data exists
-    if not DATA_PATH.exists():
-        st.error("⚠️ Dashboard data file is missing!")
+    # Check if data exists (either local or Google Drive)
+    con = get_db_connection()
+    if not con:
+        st.error("⚠️ Unable to connect to data source!")
         st.info("""
-        Please run the data pipeline first:
-        1. Open Jupyter notebooks in the notebooks/ folder
-        2. Run notebooks 01 through 07 in sequence
-        3. This will generate dashboard_data.parquet in data/processed/
-        4. Refresh this dashboard
+        Data loading failed. Please check:
+        1. Local file: data/processed/dashboard_data.parquet
+        2. Google Drive: Data file should be accessible
         """)
-        st.code(f"Expected file location: {DATA_PATH}")
         return
     
     # Sidebar filters
