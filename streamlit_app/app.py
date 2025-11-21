@@ -1,17 +1,15 @@
 """
 NYC Motor Vehicle Collisions Dashboard
-Streamlit application with DuckDB optimization
+Streamlit application with DuckDB optimization, search bar, and Generate Report button
 """
 
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
 import duckdb
 from pathlib import Path
 from datetime import datetime
 import sys
-import requests
 import tempfile
 import os
 
@@ -36,38 +34,8 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #0d6efd;
-        margin-bottom: 0.5rem;
-    }
-    .sub-header {
-        font-size: 1rem;
-        color: #6c757d;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid;
-        margin-bottom: 1rem;
-    }
-    .metric-card.primary { border-left-color: #0d6efd; }
-    .metric-card.warning { border-left-color: #ffc107; }
-    .metric-card.danger { border-left-color: #dc3545; }
-    .metric-card.info { border-left-color: #0dcaf0; }
-    .metric-value {
-        font-size: 2rem;
-        font-weight: bold;
-        margin: 0;
-    }
-    .metric-label {
-        font-size: 0.9rem;
-        color: #6c757d;
-        margin: 0;
-    }
+.main-header {font-size: 2.5rem; font-weight: bold; color: #0d6efd; margin-bottom:0.5rem;}
+.sub-header {font-size:1rem; color:#6c757d; margin-bottom:2rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -75,113 +43,60 @@ st.markdown("""
 # DATA CONNECTION
 # ============================================================================
 
-# Google Drive file ID
-DRIVE_FILE_ID = "1qwjegnIt8eX1PQQmjRRDNK_GYGtX9hSp"
 DATA_PATH = PROCESSED_DATA_DIR / "dashboard_data.parquet"
+DRIVE_FILE_ID = "1qwjegnIt8eX1PQQmjRRDNK_GYGtX9hSp"
 
 @st.cache_resource
 def download_data_from_drive():
-    """Download data from Google Drive if local file doesn't exist"""
     if DATA_PATH.exists():
         return str(DATA_PATH)
-    
-    try:
-        # Create a temporary file to store the downloaded data
-        temp_dir = tempfile.gettempdir()
-        temp_file = os.path.join(temp_dir, "dashboard_data.parquet")
-        
-        # Check if already downloaded in this session (verify size)
-        if os.path.exists(temp_file) and os.path.getsize(temp_file) > 1000000:
-            return temp_file
-        
-        # Show download progress with a spinner
-        with st.spinner('📥 Downloading data from Google Drive...'):
-            try:
-                import gdown
-                url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
-                gdown.download(url, temp_file, quiet=True)
-                
-                # Verify file size
-                file_size = os.path.getsize(temp_file)
-                if file_size < 1000000:
-                    raise Exception(f"Downloaded file too small ({file_size} bytes)")
-                
-            except ImportError:
-                # Install gdown if not available
-                import subprocess
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "gdown"])
-                import gdown
-                url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
-                gdown.download(url, temp_file, quiet=True)
-        
+    temp_dir = tempfile.gettempdir()
+    temp_file = os.path.join(temp_dir, "dashboard_data.parquet")
+    if os.path.exists(temp_file) and os.path.getsize(temp_file) > 1000000:
         return temp_file
-        
-    except Exception as e:
-        st.error(f"❌ Error downloading data: {e}")
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
-        return None
+    with st.spinner('📥 Downloading data from Google Drive...'):
+        import gdown
+        url = f'https://drive.google.com/uc?id={DRIVE_FILE_ID}'
+        gdown.download(url, temp_file, quiet=True)
+    return temp_file
 
 @st.cache_resource
 def get_db_connection():
-    """Create a DuckDB connection and register the view"""
-    # Get data source (local or downloaded from Drive)
     data_source = download_data_from_drive()
-    
     if not data_source:
         return None
-    
     con = duckdb.connect(database=':memory:')
-    try:
-        con.execute(f"CREATE OR REPLACE VIEW crashes AS SELECT * FROM '{data_source}'")
-        return con
-    except Exception as e:
-        st.error(f"❌ Error connecting to database: {e}")
-        st.error(f"Data source: {data_source}")
-        return None
+    con.execute(f"CREATE OR REPLACE VIEW crashes AS SELECT * FROM '{data_source}'")
+    return con
 
 @st.cache_data(ttl=300)
 def query_db(query):
-    """Execute a query and return a pandas DataFrame"""
     con = get_db_connection()
     if not con:
-        return None
-    
-    try:
-        df = con.execute(query).df()
-        return df
-    except Exception as e:
-        st.error(f"❌ Error executing query: {e}")
-        with st.expander("Show Query"):
-            st.code(query, language="sql")
-        return None
+        return pd.DataFrame()
+    return con.execute(query).df()
 
-@st.cache_data
 def get_column_name(candidates):
-    """Dynamically find the correct column name from a list of candidates"""
     con = get_db_connection()
     if not con:
         return None
-    
-    try:
-        cols = [c[0] for c in con.execute("DESCRIBE crashes").fetchall()]
-        for cand in candidates:
-            if cand in cols:
-                return f'"{cand}"'
-        return None
-    except:
-        return None
+    cols = [c[0] for c in con.execute("DESCRIBE crashes").fetchall()]
+    for cand in candidates:
+        if cand in cols:
+            return f'"{cand}"'
+    return None
 
-# Identify key columns dynamically
+# ============================================================================
+# IDENTIFY KEY COLUMNS
+# ============================================================================
+
 DATE_COL = get_column_name(['CRASH DATE', 'CRASH_DATE', 'crash_date'])
-BOROUGH_COL = get_column_name(['borough_clean', 'BOROUGH', 'borough'])
+BOROUGH_COL = get_column_name(['BOROUGH', 'borough_clean'])
 SEVERITY_COL = get_column_name(['total_casualties', 'TOTAL_CASUALTIES'])
 HOUR_COL = get_column_name(['crash_hour', 'CRASH_HOUR'])
 FACTOR_COL = get_column_name(['CONTRIBUTING FACTOR VEHICLE 1', 'contributing_factor_vehicle_1'])
 VEHICLE_TYPE_COL = get_column_name(['VEHICLE TYPE CODE 1', 'vehicle_type_code_1'])
 SEVERITY_CAT_COL = get_column_name(['severity_category', 'SEVERITY_CATEGORY'])
-
-# Stats columns
 INJURED_COL = get_column_name(['total_injured', 'NUMBER OF PERSONS INJURED', 'NUMBER_OF_PERSONS_INJURED'])
 KILLED_COL = get_column_name(['total_killed', 'NUMBER OF PERSONS KILLED', 'NUMBER_OF_PERSONS_KILLED'])
 VEHICLES_COL = get_column_name(['num_vehicles', 'number_of_vehicles'])
@@ -190,364 +105,98 @@ VEHICLES_COL = get_column_name(['num_vehicles', 'number_of_vehicles'])
 # HELPER FUNCTIONS
 # ============================================================================
 
-@st.cache_data
 def get_dropdown_options(column, limit=None):
-    """Get unique values for filter options"""
     if not column:
         return []
-    
     limit_clause = f"LIMIT {limit}" if limit else ""
-    query = f"""
-        SELECT DISTINCT {column} as val 
-        FROM crashes 
-        WHERE {column} IS NOT NULL 
-        ORDER BY 1 
-        {limit_clause}
-    """
-    df = query_db(query)
-    if df is None or df.empty:
-        return []
-    
-    return df['val'].tolist()
+    df = query_db(f"SELECT DISTINCT {column} as val FROM crashes WHERE {column} IS NOT NULL ORDER BY 1 {limit_clause}")
+    return df['val'].tolist() if not df.empty else []
 
-@st.cache_data
-def get_vehicle_options():
-    """Get cleaned vehicle type options"""
-    if not VEHICLE_TYPE_COL:
-        return []
-    
-    query = f"""
-        SELECT {VEHICLE_TYPE_COL} as val, COUNT(*) as count
-        FROM crashes 
-        WHERE {VEHICLE_TYPE_COL} IS NOT NULL 
-          AND LENGTH({VEHICLE_TYPE_COL}) > 3
-        GROUP BY 1 
-        ORDER BY 2 DESC 
-        LIMIT 30
-    """
-    df = query_db(query)
-    if df is None or df.empty:
-        return []
-    
-    return df['val'].tolist()
-
-@st.cache_data
-def get_year_options():
-    """Get unique years"""
-    if not DATE_COL:
-        return []
-    
-    query = f"SELECT DISTINCT EXTRACT(YEAR FROM {DATE_COL}) as val FROM crashes ORDER BY 1 DESC"
-    df = query_db(query)
-    if df is None or df.empty:
-        return []
-    
-    return [int(val) for val in df['val'].tolist()]
-
-@st.cache_data
-def get_date_range():
-    """Get min and max dates"""
-    if not DATE_COL:
-        return datetime(2020, 1, 1).date(), datetime(2024, 12, 31).date()
-    
-    query = f"SELECT MIN({DATE_COL}) as min_d, MAX({DATE_COL}) as max_d FROM crashes"
-    df = query_db(query)
-    if df is None or df.empty:
-        return datetime(2020, 1, 1).date(), datetime(2024, 12, 31).date()
-    
-    return df['min_d'][0], df['max_d'][0]
-
-def build_filter_clause(start_date, end_date, boroughs, years, vehicle_types, factors, injury_types, severity_min):
-    """Build SQL WHERE clause based on filters"""
+def build_filter_clause(start_date, end_date, boroughs, years, vehicle_types, factors, injury_types, severity_min, search_text):
     clauses = []
-    
     if start_date and end_date and DATE_COL:
         clauses.append(f"{DATE_COL} BETWEEN '{start_date}' AND '{end_date}'")
-    
     if boroughs and BOROUGH_COL:
         borough_list = "', '".join(boroughs)
         clauses.append(f"{BOROUGH_COL} IN ('{borough_list}')")
-    
     if years and DATE_COL:
         year_list = ", ".join([str(y) for y in years])
         clauses.append(f"EXTRACT(YEAR FROM {DATE_COL}) IN ({year_list})")
-    
     if vehicle_types and VEHICLE_TYPE_COL:
-        safe_types = [t.replace("'", "''") for t in vehicle_types]
-        type_list = "', '".join(safe_types)
+        type_list = "', '".join([t.replace("'", "''") for t in vehicle_types])
         clauses.append(f"{VEHICLE_TYPE_COL} IN ('{type_list}')")
-    
     if factors and FACTOR_COL:
-        safe_factors = [f.replace("'", "''") for f in factors]
-        factor_list = "', '".join(safe_factors)
+        factor_list = "', '".join([f.replace("'", "''") for f in factors])
         clauses.append(f"{FACTOR_COL} IN ('{factor_list}')")
-    
     if injury_types and SEVERITY_CAT_COL:
-        safe_injuries = [i.replace("'", "''") for i in injury_types]
-        injury_list = "', '".join(safe_injuries)
+        injury_list = "', '".join([i.replace("'", "''") for i in injury_types])
         clauses.append(f"{SEVERITY_CAT_COL} IN ('{injury_list}')")
-    
     if severity_min and SEVERITY_COL:
         clauses.append(f"{SEVERITY_COL} >= {severity_min}")
-    
+    if search_text and DATE_COL:
+        search_text_safe = search_text.replace("'", "''")
+        clauses.append(f"{FACTOR_COL} LIKE '%{search_text_safe}%' OR {VEHICLE_TYPE_COL} LIKE '%{search_text_safe}%'")
     return " WHERE " + " AND ".join(clauses) if clauses else ""
 
 def get_stats(where_clause):
-    """Get KPI statistics"""
     inj_part = f"SUM({INJURED_COL})" if INJURED_COL else "0"
     kill_part = f"SUM({KILLED_COL})" if KILLED_COL else "0"
-    
-    if VEHICLES_COL:
-        veh_part = f"SUM({VEHICLES_COL})"
-    elif VEHICLE_TYPE_COL:
-        veh_part = f"COUNT({VEHICLE_TYPE_COL})"
-    else:
-        veh_part = "0"
-    
-    query = f"""
-        SELECT 
-            COUNT(*) as crashes,
-            {inj_part} as injuries,
-            {kill_part} as deaths,
-            {veh_part} as vehicles
-        FROM crashes
-        {where_clause}
-    """
-    df_stats = query_db(query)
-    
-    if df_stats is None or df_stats.empty:
-        return 0, 0, 0, 0
-    
-    return (
-        df_stats['crashes'][0],
-        df_stats['injuries'][0] or 0,
-        df_stats['deaths'][0] or 0,
-        df_stats['vehicles'][0] or 0
-    )
+    veh_part = f"SUM({VEHICLES_COL})" if VEHICLES_COL else (f"COUNT({VEHICLE_TYPE_COL})" if VEHICLE_TYPE_COL else "0")
+    query = f"SELECT COUNT(*) as crashes, {inj_part} as injuries, {kill_part} as deaths, {veh_part} as vehicles FROM crashes {where_clause}"
+    df = query_db(query)
+    if df.empty:
+        return 0,0,0,0
+    return df['crashes'][0], df['injuries'][0] or 0, df['deaths'][0] or 0, df['vehicles'][0] or 0
 
 # ============================================================================
 # MAIN APP
 # ============================================================================
 
 def main():
-    # Header
     st.markdown('<h1 class="main-header">🚗 NYC Motor Vehicle Collisions</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Data Engineering & Visualization Dashboard (Powered by DuckDB)</p>', unsafe_allow_html=True)
-    
-    # Check if data exists (either local or Google Drive)
-    con = get_db_connection()
-    if not con:
+    st.markdown('<p class="sub-header">Data Engineering & Visualization Dashboard (DuckDB + Streamlit)</p>', unsafe_allow_html=True)
+
+    if not get_db_connection():
         st.error("⚠️ Unable to connect to data source!")
-        st.info("""
-        Data loading failed. Please check:
-        1. Local file: data/processed/dashboard_data.parquet
-        2. Google Drive: Data file should be accessible
-        """)
         return
-    
-    # Sidebar filters
-    st.sidebar.header("🔍 Filters")
-    
-    # Date range
-    min_date, max_date = get_date_range()
-    start_date = st.sidebar.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
-    end_date = st.sidebar.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
-    
-    # Year filter
-    year_options = get_year_options()
-    selected_years = st.sidebar.multiselect("Year", options=year_options, default=[])
-    
-    # Borough filter
-    borough_options = get_dropdown_options(BOROUGH_COL)
-    selected_boroughs = st.sidebar.multiselect("Boroughs", options=borough_options, default=[])
-    
-    # Vehicle Type filter
-    vehicle_options = get_vehicle_options()
-    selected_vehicles = st.sidebar.multiselect("Vehicle Type", options=vehicle_options, default=[])
-    
-    # Contributing Factor filter
-    factor_options = get_dropdown_options(FACTOR_COL, limit=50)
-    selected_factors = st.sidebar.multiselect("Contributing Factor", options=factor_options, default=[])
-    
-    # Injury Type filter
-    injury_options = get_dropdown_options(SEVERITY_CAT_COL)
-    selected_injuries = st.sidebar.multiselect("Injury Type", options=injury_options, default=[])
-    
-    # Severity slider
-    severity_min = st.sidebar.slider("Minimum Casualties", min_value=0, max_value=10, value=0)
-    
-    # Reset button
-    if st.sidebar.button("🔄 Reset Filters"):
-        st.rerun()
-    
-    # Build filter clause
-    where_clause = build_filter_clause(
-        start_date, end_date, 
-        selected_boroughs, selected_years, 
-        selected_vehicles, selected_factors, 
-        selected_injuries, severity_min
-    )
-    
-    # Get stats
-    total_crashes, total_injuries, total_deaths, total_vehicles = get_stats(where_clause)
-    
-    # Display KPI metrics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            label="Total Collisions",
-            value=f"{total_crashes:,}",
-            delta=None
-        )
-    
-    with col2:
-        st.metric(
-            label="Total Injuries",
-            value=f"{int(total_injuries):,}",
-            delta=None
-        )
-    
-    with col3:
-        st.metric(
-            label="Total Deaths",
-            value=f"{int(total_deaths):,}",
-            delta=None
-        )
-    
-    with col4:
-        st.metric(
-            label="Vehicles Involved (Est.)",
-            value=f"{int(total_vehicles):,}",
-            delta=None
-        )
-    
-    st.divider()
-    
-    # Time series chart
-    st.subheader("📈 Collisions Over Time")
-    if DATE_COL:
-        query = f"""
-            SELECT {DATE_COL} as date, COUNT(*) as count 
-            FROM crashes 
-            {where_clause}
-            GROUP BY 1 ORDER BY 1
-        """
-        df_time = query_db(query)
-        if df_time is not None and not df_time.empty:
-            fig_time = px.line(
-                df_time, x='date', y='count',
-                labels={'date': 'Date', 'count': 'Number of Collisions'}
-            )
-            fig_time.update_traces(line_color='#0d6efd')
-            fig_time.update_layout(hovermode='x unified', height=400)
-            st.plotly_chart(fig_time, use_container_width=True)
-        else:
-            st.info("No data available for the selected filters")
-    
-    # Borough and Hourly charts
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🏙️ By Borough")
-        if BOROUGH_COL:
-            query = f"""
-                SELECT {BOROUGH_COL} as borough, COUNT(*) as count 
-                FROM crashes 
-                {where_clause}
-                GROUP BY 1 ORDER BY 2 DESC
-            """
-            df_borough = query_db(query)
-            if df_borough is not None and not df_borough.empty:
-                fig_borough = px.bar(
-                    df_borough, x='borough', y='count',
-                    labels={'borough': 'Borough', 'count': 'Collisions'},
-                    color='count', color_continuous_scale='Blues'
-                )
-                fig_borough.update_layout(showlegend=False, height=400)
-                st.plotly_chart(fig_borough, use_container_width=True)
-            else:
-                st.info("No data available")
-    
-    with col2:
-        st.subheader("🕐 By Hour of Day")
-        if HOUR_COL:
-            query = f"""
-                SELECT {HOUR_COL} as hour, COUNT(*) as count 
-                FROM crashes 
-                {where_clause}
-                GROUP BY 1 ORDER BY 1
-            """
-            df_hourly = query_db(query)
-            if df_hourly is not None and not df_hourly.empty:
-                fig_hourly = px.bar(
-                    df_hourly, x='hour', y='count',
-                    labels={'hour': 'Hour of Day', 'count': 'Collisions'},
-                    color='count', color_continuous_scale='Oranges'
-                )
-                fig_hourly.update_layout(showlegend=False, height=400)
-                st.plotly_chart(fig_hourly, use_container_width=True)
-            else:
-                st.info("No data available")
-    
-    # Severity and Factors charts
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("⚠️ Severity Distribution")
-        if SEVERITY_CAT_COL:
-            query = f"""
-                SELECT {SEVERITY_CAT_COL} as category, COUNT(*) as count 
-                FROM crashes 
-                {where_clause}
-                GROUP BY 1 ORDER BY 2 DESC
-            """
-            df_severity = query_db(query)
-            if df_severity is not None and not df_severity.empty:
-                fig_severity = px.pie(
-                    df_severity, names='category', values='count',
-                    color_discrete_sequence=px.colors.sequential.RdBu
-                )
-                fig_severity.update_layout(height=400)
-                st.plotly_chart(fig_severity, use_container_width=True)
-            else:
-                st.info("No data available")
-    
-    with col2:
-        st.subheader("🚦 Contributing Factors")
-        if FACTOR_COL:
-            query = f"""
-                SELECT {FACTOR_COL} as factor, COUNT(*) as count 
-                FROM crashes 
-                {where_clause} AND {FACTOR_COL} != 'Unspecified'
-                GROUP BY 1 ORDER BY 2 DESC
-                LIMIT 10
-            """
-            df_factors = query_db(query)
-            if df_factors is not None and not df_factors.empty:
-                fig_factors = px.bar(
-                    df_factors, y='factor', x='count',
-                    labels={'factor': 'Contributing Factor', 'count': 'Count'},
-                    orientation='h',
-                    color='count', color_continuous_scale='Reds'
-                )
-                fig_factors.update_layout(
-                    showlegend=False, 
-                    yaxis={'categoryorder': 'total ascending'},
-                    height=400
-                )
-                st.plotly_chart(fig_factors, use_container_width=True)
-            else:
-                st.info("No data available")
-    
-    # Footer
-    st.divider()
-    st.markdown("""
-    <p style='text-align: center; color: #6c757d;'>
-        Data Source: <a href='https://data.cityofnewyork.us/' target='_blank'>NYC Open Data</a> | 
-        Built with Streamlit & Plotly | Powered by DuckDB
-    </p>
-    """, unsafe_allow_html=True)
+
+    # -------------------------
+    # SIDEBAR FILTERS
+    # -------------------------
+    st.sidebar.header("🔍 Filters & Search")
+    min_date, max_date = datetime(2020,1,1), datetime(2024,12,31)
+    start_date = st.sidebar.date_input("Start Date", min_date)
+    end_date = st.sidebar.date_input("End Date", max_date)
+    selected_years = st.sidebar.multiselect("Year", options=get_dropdown_options(DATE_COL))
+    selected_boroughs = st.sidebar.multiselect("Boroughs", options=get_dropdown_options(BOROUGH_COL))
+    selected_vehicles = st.sidebar.multiselect("Vehicle Type", options=get_dropdown_options(VEHICLE_TYPE_COL))
+    selected_factors = st.sidebar.multiselect("Contributing Factor", options=get_dropdown_options(FACTOR_COL, limit=50))
+    selected_injuries = st.sidebar.multiselect("Injury Type", options=get_dropdown_options(SEVERITY_CAT_COL))
+    severity_min = st.sidebar.slider("Minimum Casualties", 0, 10, 0)
+    search_text = st.sidebar.text_input("Search Vehicle or Factor")
+
+    # -------------------------
+    # GENERATE REPORT BUTTON
+    # -------------------------
+    if st.sidebar.button("📄 Generate Report"):
+        where_clause = build_filter_clause(start_date, end_date, selected_boroughs, selected_years,
+                                           selected_vehicles, selected_factors, selected_injuries,
+                                           severity_min, search_text)
+
+        # KPI Metrics
+        crashes, injuries, deaths, vehicles = get_stats(where_clause)
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Collisions", f"{crashes:,}")
+        col2.metric("Total Injuries", f"{int(injuries):,}")
+        col3.metric("Total Deaths", f"{int(deaths):,}")
+        col4.metric("Vehicles Involved", f"{int(vehicles):,}")
+
+        # Time Series
+        if DATE_COL:
+            df_time = query_db(f"SELECT {DATE_COL} as date, COUNT(*) as count FROM crashes {where_clause} GROUP BY 1 ORDER BY 1")
+            if not df_time.empty:
+                fig_time = px.line(df_time, x='date', y='count', labels={'date':'Date','count':'Collisions'})
+                st.plotly_chart(fig_time, use_container_width=True)
 
 if __name__ == "__main__":
     main()
