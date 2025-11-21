@@ -99,55 +99,83 @@ def clean_crash_data(df: pd.DataFrame) -> pd.DataFrame:
     Clean crashes dataset:
     - Standardize column names
     - Convert date/time
+    - Create crash_hour
+    - Clean borough values
     - Remove rows with missing essential fields
     - Remove clearly invalid coordinates
     """
     df = clean_column_names(df)
 
-    # Convert CRASH_DATE to datetime
+    # -----------------------------
+    # DATE: convert CRASH_DATE
+    # -----------------------------
     if "crash_date" in df.columns:
         df["crash_date"] = pd.to_datetime(df["crash_date"], errors="coerce")
 
-    # Convert CRASH_TIME to proper time (if exists)
+    # -----------------------------
+    # TIME: convert CRASH_TIME and create CRASH_HOUR
+    # -----------------------------
     if "crash_time" in df.columns:
-        # Some times are "HH:MM"; others might be malformed
         df["crash_time"] = pd.to_datetime(
             df["crash_time"], format="%H:%M", errors="coerce"
-        ).dt.time
+        )
 
-    # Essential: we need a valid crash_date
-    if "crash_date" in df.columns:
-        df = df.dropna(subset=["crash_date"])
+        # extract hour after converting
+        df["crash_hour"] = df["crash_time"].dt.hour
 
-    # Convert numeric injury / death columns
+    # -----------------------------
+    # BOROUGH CLEANING
+    # -----------------------------
+    if "borough" in df.columns:
+        df["borough"] = df["borough"].astype(str).str.strip().str.upper()
+
+        df["borough"] = df["borough"].replace(
+            ["", " ", "NONE", "NULL", "NAN"], pd.NA
+        )
+
+        # drop missing boroughs
+        df = df.dropna(subset=["borough"])
+
+    # -----------------------------
+    # ENSURE CRASH_DATE EXISTS
+    # -----------------------------
+    df = df.dropna(subset=["crash_date"])
+
+    # -----------------------------
+    # NUMERIC INJURY / DEATH COLUMNS
+    # -----------------------------
     numeric_cols = [
         col
         for col in df.columns
-        if "injured" in col or "killed" in col or col.endswith("_injured") or col.endswith("_killed")
+        if "injured" in col
+        or "killed" in col
+        or col.endswith("_injured")
+        or col.endswith("_killed")
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
-    # Remove obviously invalid coordinates (0 or NaN, or far outside NYC)
+    # -----------------------------
+    # COORDINATE CLEANING
+    # -----------------------------
     if "latitude" in df.columns and "longitude" in df.columns:
         df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
         df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
 
-        # Remove rows with both coords missing
         df = df.dropna(subset=["latitude", "longitude"])
 
-        # Remove (0,0) or values clearly out of NYC bounding box
         df = df[
             (df["latitude"].between(40.0, 41.2))
             & (df["longitude"].between(-75.0, -72.0))
         ]
 
-    # Remove duplicates based on collision id if present
+    # -----------------------------
+    # REMOVE DUPLICATES
+    # -----------------------------
     if "collision_id" in df.columns:
         df = remove_duplicates(df, subset=["collision_id", "crash_date", "crash_time"])
 
     return df
-
 
 def clean_persons_data(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -162,28 +190,21 @@ def clean_persons_data(df: pd.DataFrame) -> pd.DataFrame:
     if "collision_id" in df.columns:
         df = df.dropna(subset=["collision_id"])
 
-    # Person age
+    # Person age cleaning
     if "person_age" in df.columns:
         df["person_age"] = pd.to_numeric(df["person_age"], errors="coerce")
-        # Ages outside [0, 110] seem unrealistic; set to NaN
         df.loc[(df["person_age"] < 0) | (df["person_age"] > 110), "person_age"] = np.nan
 
-    # Injury column: normalize strings
+    # Normalize injury type
     if "person_injury" in df.columns:
         df["person_injury"] = (
-            df["person_injury"]
-            .astype(str)
-            .str.strip()
-            .str.title()
+            df["person_injury"].astype(str).strip().str.title()
         )
 
-    # Person type normalization
+    # Normalize person type
     if "person_type" in df.columns:
         df["person_type"] = (
-            df["person_type"]
-            .astype(str)
-            .str.strip()
-            .str.title()
+            df["person_type"].astype(str).strip().str.title()
         )
 
     df = remove_duplicates(df)
@@ -191,32 +212,20 @@ def clean_persons_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_vehicles_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean vehicles dataset:
-    - Standardize column names
-    - Clean vehicle year
-    - Normalize vehicle type strings
-    """
     df = clean_column_names(df)
 
     # Vehicle year
     for col in ["vehicle_year", "vehicle_year_1", "vehicle_year_2"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-            # Simple plausibility filter
             df.loc[(df[col] < 1950) | (df[col] > 2030), col] = np.nan
 
-    # Normalize any 'vehicle_type' columns
+    # Normalize vehicle types
     type_cols = [c for c in df.columns if "vehicle_type" in c]
     for col in type_cols:
-        df[col] = (
-            df[col]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
+        df[col] = df[col].astype(str).str.strip().str.upper()
 
-    # Drop rows without collision_id if present
+    # Remove rows without collision_id
     if "collision_id" in df.columns:
         df = df.dropna(subset=["collision_id"])
 

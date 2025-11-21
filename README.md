@@ -1,211 +1,165 @@
-# NYC Motor Vehicle Collisions Analysis
+# NYC Motor Vehicle Collisions – Data Engineering Project (ML1)
 
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Dash](https://img.shields.io/badge/dash-2.14+-green.svg)](https://dash.plotly.com/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+This project analyzes NYC motor vehicle collision data and builds an end-to-end
+data engineering pipeline plus an interactive dashboard.
 
-## 📊 Project Overview
-
-Complete data engineering pipeline for analyzing NYC Motor Vehicle Collisions using data from [NYC Open Data](https://data.cityofnewyork.us/). This project demonstrates the full data engineering workflow from API-based data ingestion to interactive dashboard deployment.
-
-### Key Features
-- ✅ **API-based Data Fetching** - No manual downloads required
-- ✅ **Comprehensive Data Pipeline** - Load → Clean → Integrate → Engineer → Visualize
-- ✅ **Modular Architecture** - Reusable Python modules in `src/`
-- ✅ **Interactive Dashboard** - Built with Dash/Plotly
-- ✅ **Production Ready** - Configured for Render deployment
-
-### Project Workflow
-1. **Data Ingestion** - Fetch from NYC Open Data API
-2. **Exploratory Data Analysis** - Understand data quality and patterns
-3. **Pre-Integration Cleaning** - Clean individual datasets
-4. **Dataset Integration** - Merge on COLLISION_ID
-5. **Post-Integration Cleaning** - Ensure consistency
-6. **Feature Engineering** - Create analytical features
-7. **Dashboard Development** - Interactive visualizations
-8. **Deployment** - Public web application
+The work is based on the NYC Open Data collisions datasets (crashes and persons
+tables). Our goal is to clean, integrate, and enrich the data so we can answer
+a set of research questions about where, when, and why crashes occur in New York
+City.
 
 ---
 
-## 🚀 Quick Start
+## Project Team
 
-### Prerequisites
-- Python 3.10 or higher
-- pip package manager
-- Git
+- Omar — data pipeline, feature engineering, dashboard filters & callbacks  
+- Majed — project skeleton, configuration and deployment setup  
+- Karam — data integration and joins between crashes and persons  
+- Aisha — initial project structure and configuration files  
+- Habiba — data cleaning and exploratory analysis  
 
-### Installation
+Each team member also proposed at least two research questions that are
+answered in the final analysis notebook and/or on the dashboard.
 
-```bash
-# Clone repository
-git clone https://github.com/Majed-Mohamed/DataEngineering_ML1.git
-cd DataEngineering_ML1
+---
 
-# Create virtual environment
-python -m venv venv
+## Repository Structure
 
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
+```text
+DataEngineering_ML1/
+├── app/                      # Dash web application
+│   ├── assets/               # CSS styles
+│   ├── components/           # Layouts, filters, graphs, callbacks
+│   └── dash_app.py           # Dash entry point (server)
+│
+├── data/
+│   ├── cache/                # Temporary data (ignored by git)
+│   └── processed/            # Final processed parquet files (local only)
+│       └── .gitkeep          # Placeholder so the folder exists in git
+│
+├── docs/                     # Project description / assignment PDF
+│
+├── notebooks/
+│   └── data/
+│       ├── 01_load_and_eda.ipynb
+│       ├── 02_clean_crashes.ipynb
+│       ├── 03_clean_persons.ipynb
+│       ├── 04_integrate_datasets.ipynb
+│       ├── 05_post_integration_cleaning.ipynb
+│       ├── 06_feature_engineering.ipynb
+│       └── 07_final_visual_analysis.ipynb
+│
+├── src/
+│   ├── config.py             # Paths, app title, port, etc.
+│   ├── data_loader.py        # Loading raw data
+│   ├── data_cleaning.py      # Cleaning crashes & persons tables
+│   ├── data_integration.py   # Joining datasets and building master table
+│   └── feature_engineering.py# Extra features for analysis/dashboard
+│
+├── tests/                    # Simple unit tests for the pipeline
+├── deployment/               # Render / Heroku configuration (if deployed)
+├── run_pipeline.py           # Orchestrates the full data pipeline
+├── requirements.txt          # Python dependencies
+└── README.md                 # You are here 🙂
 
-# Install dependencies
+Data Pipeline:
+
+The pipeline is split into clearly defined steps, implemented in src/ and
+demonstrated in the Jupyter notebooks:
+	1.	Load & EDA (01_load_and_eda.ipynb)
+	•	Load the raw crashes and persons datasets.
+	•	Inspect schema, basic statistics, and initial data quality issues.
+	2.	Cleaning (02 & 03)
+	•	02_clean_crashes.ipynb and 03_clean_persons.ipynb handle:
+	•	Missing values
+	•	Invalid / inconsistent codes
+	•	Outliers (e.g. negative injuries)
+	•	Date/time parsing
+	3.	Integration (04)
+	•	Join crashes and persons on collision_id.
+	•	Build a unified table with crash, location, time, vehicle, and person info.
+	4.	Post-Integration Cleaning (05)
+	•	Remove remaining duplicates and inconsistent rows.
+	•	Ensure final schema is suitable for analysis and dashboard.
+	5.	Feature Engineering (06 / src/feature_engineering.py)
+	•	Add derived features, e.g.:
+	•	crash_year, crash_month, crash_day_of_week, is_weekend
+	•	total_injured, total_killed, severity_score
+	•	Simple vehicle-type indicators (has_truck, has_bus, has_bicycle)
+	•	Save processed datasets as parquet in data/processed/
+(these files are ignored by git and recreated locally via the pipeline).
+	6.	Final Visual Analysis (07)
+	•	Answer the research questions with plots and commentary.
+	•	Many of these questions also appear as interactive views in the dashboard.
+
+You can re-run the entire pipeline with: python run_pipeline.py
+
+Dashboard:
+
+The interactive dashboard is built with Dash + Plotly and lives in app/.
+
+To run it locally:# 1. Activate virtualenv (if not already)
+source .venv/bin/activate          # macOS / Linux
+# or
+.\.venv\Scripts\activate           # Windows
+
+# 2. Install requirements (first time only)
 pip install -r requirements.txt
 
-# Copy environment template (optional)
-cp .env.example .env
-```
+# 3. Make sure processed parquet data exists
+python run_pipeline.py             # or run the notebooks in order
 
-### Run Data Pipeline
-
-```bash
-# Execute complete pipeline
-python run_pipeline.py
-```
-
-### Run Dashboard Locally
-
-```bash
-# Start Dash application
+# 4. Start the Dash app
 python app/dash_app.py
-```
+Then open the browser at: http://127.0.0.1:8050/
+Dashboard Features
+	•	Filters panel
+	•	Date range selector
+	•	Borough multi-select
+	•	Severity (injury / fatal) checklist
+	•	Injury type (pedestrian / cyclist / motorist)
+	•	Vehicle type dropdown
+	•	Free-text “search” field
+	•	Generate Report button that updates all charts at once
+	•	Main views
+	•	Time series of collisions over time
+	•	Collisions by borough
+	•	Severity distribution (injuries vs fatalities)
+	•	Contributing factors (top causes)
+	•	Hour-of-day distribution
+	•	Simple geographic heatmap of crash locations
+    The graphs are designed to support the research questions defined by the team
+(e.g. “Which borough has the most severe injuries?”, “At what times do crashes
+spike on weekends?”, etc.).
+Research Questions (Examples)
 
-Visit: http://localhost:8050
+Each team member proposed at least two questions; examples include:
+	1.	Which borough has the highest collision density?
+	2.	How do collisions vary by hour of day and day of week?
+	3.	Which contributing factors are most common in severe crashes?
+	4.	How do injuries vs fatalities differ between boroughs?
+	5.	Which vehicle types are most frequently involved in pedestrian injuries?
+	6.	How did collision counts change across years?
+	7.	How do weekend collisions differ from weekday collisions?
+	8.	At what hours do alcohol-related factors appear most often?
+	9.	Which boroughs show the highest severity scores?
+	10.	How does total injured change during adverse weather conditions?
 
----
+These questions are answered with a combination of static plots in
+07_final_visual_analysis.ipynb and interactive views in the dashboard.
+Reproducibility
+	•	All processing code is written as reusable functions in src/.
+	•	Notebooks call these functions for transparency.
+	•	Large parquet datasets in data/processed/ are not tracked by git to keep
+the repository lightweight; they are regenerated locally via the pipeline.
+How to Run Tests
 
-## 📁 Project Structure
+Basic tests for the main pipeline steps are provided in tests/:pytest
 
-```
-DATAENGINEERING_ML1/
-│
-├── src/                          # Reusable Python modules
-│   ├── config.py                 # Centralized configuration
-│   ├── data_loader.py            # API data fetching
-│   ├── data_cleaning.py          # Cleaning functions
-│   ├── data_integration.py       # Dataset merging
-│   └── feature_engineering.py    # Feature creation
-│
-├── notebooks/                    # Jupyter analysis notebooks
-│   ├── 01_load_and_eda.ipynb
-│   ├── 02_clean_crashes.ipynb
-│   ├── 03_clean_persons.ipynb
-│   ├── 04_integrate_datasets.ipynb
-│   ├── 05_post_integration_cleaning.ipynb
-│   ├── 06_feature_engineering.ipynb
-│   └── 07_final_visual_analysis.ipynb
-│
-├── app/                          # Dash dashboard
-│   ├── dash_app.py              # Main application
-│   ├── components/              # UI components
-│   │   ├── filters.py
-│   │   ├── graphs.py
-│   │   ├── layouts.py
-│   │   └── callbacks.py
-│   └── assets/                  # Static files
-│       └── styles.css
-│
-├── data/                         # Data storage
-│   ├── processed/               # Cleaned data
-│   └── cache/                   # Temporary cache
-│
-├── deployment/                   # Deployment configs
-│   ├── Procfile
-│   ├── runtime.txt
-│   └── render.yaml
-│
-├── tests/                        # Unit tests
-│
-└── run_pipeline.py              # Main pipeline script
-```
-
----
-
-## 📚 Data Sources
-
-All data is fetched from NYC Open Data via API:
-
-- **[Motor Vehicle Collisions - Crashes](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95)**
-- **[Motor Vehicle Collisions - Person](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Person/f55k-p6yu)**
-- **[Motor Vehicle Collisions - Vehicles](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Vehicles/bm4k-52h4)**
-
----
-
-## 🔧 Development Workflow
-
-### 1. Data Pipeline (Notebooks)
-
-Work through notebooks sequentially (01 → 07)
-
-### 2. Implement Core Functions
-
-Edit modules in `src/` directory
-
-### 3. Build Dashboard
-
-Develop components in `app/components/`
-
-### 4. Test Locally
-
-```bash
-pytest tests/
-python app/dash_app.py
-```
-
----
-
-## 🚢 Deployment to Render
-
-1. Push to GitHub
-2. Connect repository to Render
-3. Render auto-deploys on push to main
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src tests/
-```
-
----
-
-## 📊 Dashboard Features
-
-- Interactive filters (date, borough, severity, vehicle type)
-- Time series analysis
-- Geographic heatmaps
-- Borough comparisons
-- Contributing factors analysis
-- Key metrics and KPIs
-
----
-
-## 📝 License
-
-MIT License
-
----
-
-## 📧 Contact
-
-- Repository: [Majed-Mohamed/DataEngineering_ML1](https://github.com/Majed-Mohamed/DataEngineering_ML1)
-
----
-
-## 📌 Project Status
-
-**Current Phase:** ✅ Project Structure Setup Complete
-
-**Next Steps:**
-1. Implement data loading functions
-2. Develop cleaning logic
-3. Build integration pipeline
-4. Create feature engineering
-5. Design dashboard components
-6. Deploy to production
+Notes for the Instructor / TA
+	•	The “Generate Report” button triggers a single callback that reads all filter
+values and updates every graph at once.
+	•	All borough, severity, and vehicle selections are synchronized between
+notebooks and dashboard.
+	•	The repository is cleaned from large parquet files via .gitignore; only
+small configuration and placeholder files are versioned.

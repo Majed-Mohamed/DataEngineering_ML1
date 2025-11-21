@@ -3,16 +3,33 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Virtual Environment
 venv/
 env/
 ENV/
-.venv/
+.venv
 env.bak/
 venv.bak/
 
-# Jupyter Notebook Checkpoints
+# Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb_checkpoints
 */.ipynb_checkpoints/*
@@ -21,25 +38,17 @@ venv.bak/
 .env
 .env.local
 
-# ----------------------------
-# DATA FILES (IMPORTANT)
-# ----------------------------
-
-# Ignore ALL processed parquet files (these are huge)
-data/processed/*.parquet
-data/processed/*.csv
-data/processed/*.json
-
-# Ignore cache + raw data
-data/raw/*
-data/cache/*
-data/cache/**
-
-# Keep only placeholder files
+# Data files (cache only, keep processed structure)
+data/cache/
+*.csv
+*.json
 !data/processed/.gitkeep
 !data/cache/.gitkeep
+# Ignore processed data generated inside notebooks
+notebooks/data/processed/*
+!notebooks/data/processed/.gitkeep
 
-# IDE / Project Files
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -47,7 +56,7 @@ data/cache/**
 *~
 .DS_Store
 
-# OS Files
+# OS
 .DS_Store
 Thumbs.db
 Desktop.ini
@@ -71,7 +80,7 @@ dmypy.json
 *.log
 logs/
 
-# Packaging
+# Distribution / packaging
 .Python
 *.egg-info/
 dist/
