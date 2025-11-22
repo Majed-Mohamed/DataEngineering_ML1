@@ -325,6 +325,25 @@ def get_stats(where_clause):
         df_stats['vehicles'][0] or 0
     )
 
+def reset_filters():
+    """Clear all filter-related state so widgets go back to defaults."""
+    # If you want to be very explicit, clear only known filter keys
+    keys_to_clear = [
+        "start_date",
+        "end_date",
+        "selected_years",
+        "selected_boroughs",
+        "selected_vehicles",
+        "selected_factors",
+        "selected_injuries",
+        "severity_min",
+    ]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+
+
+
 # ============================================================================
 # MAIN APP
 # ============================================================================
@@ -345,40 +364,115 @@ def main():
         """)
         return
     
-    # Sidebar filters
+       # Sidebar filters
+       # Sidebar filters
     st.sidebar.header("🔍 Filters")
-    
-    # Date range
+
+    # --- Get global min/max date once ---
     min_date, max_date = get_date_range()
-    start_date = st.sidebar.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
-    end_date = st.sidebar.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
-    
+
+    # --- Initialise filter defaults once per session ---
+    if "filters_initialized" not in st.session_state:
+        st.session_state.start_date = min_date
+        st.session_state.end_date = max_date
+        st.session_state.years = []
+        st.session_state.boroughs = []
+        st.session_state.vehicles = []
+        st.session_state.factors = []
+        st.session_state.injuries = []
+        st.session_state.severity_min = 0
+        st.session_state.filters_initialized = True
+
+    # --- Reset button (MUST be before widgets) ---
+    reset_clicked = st.sidebar.button("🔄 Reset Filters")
+
+    if reset_clicked:
+        # reset all filter values in session_state
+        st.session_state.start_date = min_date
+        st.session_state.end_date = max_date
+        st.session_state.years = []
+        st.session_state.boroughs = []
+        st.session_state.vehicles = []
+        st.session_state.factors = []
+        st.session_state.injuries = []
+        st.session_state.severity_min = 0
+        # re-run so widgets are rebuilt using the reset values
+        st.rerun()
+
+    # --- Widgets that READ/WRITE session_state directly ---
+    # Date range
+    st.sidebar.date_input(
+        "Start Date",
+        min_value=min_date,
+        max_value=max_date,
+        key="start_date",
+    )
+    st.sidebar.date_input(
+        "End Date",
+        min_value=min_date,
+        max_value=max_date,
+        key="end_date",
+    )
+
     # Year filter
     year_options = get_year_options()
-    selected_years = st.sidebar.multiselect("Year", options=year_options, default=[])
-    
+    st.sidebar.multiselect(
+        "Year",
+        options=year_options,
+        key="years",
+    )
+
     # Borough filter
     borough_options = get_dropdown_options(BOROUGH_COL)
-    selected_boroughs = st.sidebar.multiselect("Boroughs", options=borough_options, default=[])
-    
+    st.sidebar.multiselect(
+        "Boroughs",
+        options=borough_options,
+        key="boroughs",
+    )
+
     # Vehicle Type filter
     vehicle_options = get_vehicle_options()
-    selected_vehicles = st.sidebar.multiselect("Vehicle Type", options=vehicle_options, default=[])
-    
+    st.sidebar.multiselect(
+        "Vehicle Type",
+        options=vehicle_options,
+        key="vehicles",
+    )
+
     # Contributing Factor filter
     factor_options = get_dropdown_options(FACTOR_COL, limit=50)
-    selected_factors = st.sidebar.multiselect("Contributing Factor", options=factor_options, default=[])
-    
+    st.sidebar.multiselect(
+        "Contributing Factor",
+        options=factor_options,
+        key="factors",
+    )
+
     # Injury Type filter
     injury_options = get_dropdown_options(SEVERITY_CAT_COL)
-    selected_injuries = st.sidebar.multiselect("Injury Type", options=injury_options, default=[])
-    
+    st.sidebar.multiselect(
+        "Injury Type",
+        options=injury_options,
+        key="injuries",
+    )
+
     # Severity slider
-    severity_min = st.sidebar.slider("Minimum Casualties", min_value=0, max_value=10, value=0)
-    
-    # Reset button
-    if st.sidebar.button("🔄 Reset Filters"):
-        st.rerun()
+    st.sidebar.slider(
+        "Minimum Casualties",
+        min_value=0,
+        max_value=10,
+        key="severity_min",
+    )
+
+    # Read the current values from session_state for the query
+    start_date = st.session_state.start_date
+    end_date = st.session_state.end_date
+    selected_years = st.session_state.years
+    selected_boroughs = st.session_state.boroughs
+    selected_vehicles = st.session_state.vehicles
+    selected_factors = st.session_state.factors
+    selected_injuries = st.session_state.injuries
+    severity_min = st.session_state.severity_min
+
+
     
     # Build filter clause
     where_clause = build_filter_clause(
