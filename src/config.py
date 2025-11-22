@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 
 # Project paths
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = Path(os.path.abspath(__file__)).parent.parent
 DATA_DIR = BASE_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 CACHE_DIR = DATA_DIR / "cache"
